@@ -179,8 +179,7 @@ void loop()
     Serial.print("CURRENT MAX detected: "); Serial.println(motor_currentRead, DEC);
   }
   /* Check Limiter */
-  Serial.print("Position: "); Serial.println(portal_position, DEC);
-  if(400 < portal_position) {
+  if(2000 < portal_position) {
     if(HIGH == digitalRead(LIMITER_pin)) {
       digitalWrite(MOTOR_PWM_pin, LOW);
       digitalWrite(RELAY_LEFT_pin, LOW);
@@ -188,6 +187,8 @@ void loop()
       digitalWrite(IR_POWER_pin, LOW);
       portal_cmd_accepted = false;
       portal_force = 0;
+      /* As the limiter triggered we are at the end of the rail */
+      portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
       Serial.println("LIMITER detected");
     }
   }
