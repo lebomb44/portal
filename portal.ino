@@ -5,7 +5,7 @@
 #define RELAY_LEFT_pin 7
 #define RELAY_RIGHT_pin 8
 #define IR_POWER_pin 10
-#define IR_STATUS_pin 3
+#define LIMITER_pin 3
 #define RF_IN_pin 2
 #define MOTOR_SENSE_pin A0
 #define MOTOR_PWM_pin 6
@@ -17,8 +17,8 @@
 #define PORTAL_CMD_CLOSE 0
 #define PORTAL_CMD_OPEN  1
 
-#define MOTOR_MAX_CURRENT 90
-#define MOTOR_MAX_SLOW_CURRENT 25
+#define MOTOR_MAX_CURRENT 110
+#define MOTOR_MAX_SLOW_CURRENT 35
 
 HomeEasy homeEasy;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
@@ -55,7 +55,11 @@ uint16_t get_force(uint16_t _begin_position, uint16_t _position) {
       }
     }
   }
-  return min(_begin_force, _end_force);
+
+  /* Set to MAX force to unstruck the portal */
+  if(50 > _position) { return PORTAL_SLOW_SLOT; }
+  /* Else normal work */
+  else { return min(_begin_force, _end_force); }
 }
 
 void setup()
@@ -70,7 +74,7 @@ void setup()
   digitalWrite(RELAY_RIGHT_pin, LOW);
   pinMode(IR_POWER_pin, OUTPUT);
   digitalWrite(IR_POWER_pin, LOW);
-  pinMode(IR_STATUS_pin, INPUT);
+  pinMode(LIMITER_pin, INPUT);
   pinMode(RF_IN_pin, INPUT);
   pinMode(MOTOR_SENSE_pin, INPUT);
   pinMode(MOTOR_PWM_pin, OUTPUT);
@@ -134,11 +138,6 @@ void loop()
     homeEasy.rxRelease();
   }
 
-  /* Check the IR barrier */
-  if(LOW == digitalRead(IR_STATUS_pin)) {
-    //portal_force = 0;
-  }
-
   if(true == portal_cmd_accepted) {
     delay(1);
     portal_position++;
@@ -146,8 +145,7 @@ void loop()
       portal_position = PORTAL_FULL_SLOT;
     }
     portal_force = get_force(portal_start_position, portal_position);
-    /* Set to MAX force to unstruck the portal */
-    if(100 > portal_position) { portal_force = PORTAL_SLOW_SLOT; }
+
     if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) > portal_position) {
       if(100 > portal_position) {
         motor_max_current = 1024;
@@ -169,6 +167,8 @@ void loop()
   else {
     motor_max_current_nb = 0;
   }
+
+  /* Check over current */
   if(100 < motor_max_current_nb) {
     digitalWrite(MOTOR_PWM_pin, LOW);
     digitalWrite(RELAY_LEFT_pin, LOW);
@@ -178,6 +178,20 @@ void loop()
     portal_force = 0;
     Serial.print("CURRENT MAX detected: "); Serial.println(motor_currentRead, DEC);
   }
+  /* Check Limiter */
+  Serial.print("Position: "); Serial.println(portal_position, DEC);
+  if(400 < portal_position) {
+    if(HIGH == digitalRead(LIMITER_pin)) {
+      digitalWrite(MOTOR_PWM_pin, LOW);
+      digitalWrite(RELAY_LEFT_pin, LOW);
+      digitalWrite(RELAY_RIGHT_pin, LOW);
+      digitalWrite(IR_POWER_pin, LOW);
+      portal_cmd_accepted = false;
+      portal_force = 0;
+      Serial.println("LIMITER detected");
+    }
+  }
+  
   /* Clone LED status on RF signal */
   //digitalWrite(MOTOR_PWM_pin, HIGH);
   analogWrite(MOTOR_PWM_pin, map(portal_force, 0, PORTAL_SLOW_SLOT, 0, 255));
