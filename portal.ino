@@ -18,7 +18,7 @@
 #define PORTAL_CMD_OPEN  1
 
 #define MOTOR_MAX_CURRENT 110
-#define MOTOR_MAX_SLOW_CURRENT 35
+#define MOTOR_MAX_SLOW_CURRENT 70
 
 HomeEasy homeEasy;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
@@ -50,8 +50,8 @@ uint16_t get_force(uint16_t _begin_position, uint16_t _position) {
     }
     if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT) <= _position) {
       _end_force = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - _position;
-      if(PORTAL_SLOW_SLOT/4 > _end_force) {
-        _end_force = PORTAL_SLOW_SLOT/4;
+      if(PORTAL_SLOW_SLOT/2 > _end_force) {
+        _end_force = PORTAL_SLOW_SLOT/2;
       }
     }
   }
