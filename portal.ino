@@ -1,5 +1,7 @@
 #include <Fifo_U16.h>
 #include <HomeEasy.h>
+#define F_CPU 16000000UL
+#include <util/delay.h>
 
 #define LED_pin 13
 #define RELAY_LEFT_pin 7
@@ -79,6 +81,9 @@ void setup()
   pinMode(MOTOR_SENSE_pin, INPUT);
   pinMode(MOTOR_PWM_pin, OUTPUT);
   digitalWrite(MOTOR_PWM_pin, LOW);
+
+  /* Disable Timer 0 */
+  //TCCR0B = TCCR0B & 0xF8;
 }
 
 void loop()
@@ -90,7 +95,7 @@ void loop()
     Serial.print(homeEasy.rxGetGroup(), HEX);Serial.print("-");
     Serial.print(homeEasy.rxGetDevice(), HEX);Serial.print("-");
     Serial.print(homeEasy.rxGetStatus(), HEX);Serial.println();
-    delay(500);
+    _delay_ms(500);
     homeEasy.purge();
     /* Check the authorized codes */
     if(((0xFCE1CE == homeEasy.rxGetManufacturer()) && (0x0 == homeEasy.rxGetGroup()) && (0x2 == homeEasy.rxGetDevice())) \
@@ -139,7 +144,7 @@ void loop()
   }
 
   if(true == portal_cmd_accepted) {
-    delay(1);
+    _delay_ms(1);
     portal_position++;
     if(PORTAL_FULL_SLOT < portal_position) {
       portal_position = PORTAL_FULL_SLOT;
