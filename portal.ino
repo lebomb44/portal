@@ -10,7 +10,7 @@
 #define LIMITER_pin 3
 #define RF_IN_pin 2
 #define MOTOR_SENSE_pin A0
-#define MOTOR_PWM_pin 6
+#define MOTOR_PWM_pin 11
 
 #define PORTAL_FULL_SLOT (PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT + PORTAL_SLOW_SLOT)
 #define PORTAL_SLOW_SLOT 4000
@@ -83,7 +83,7 @@ void setup()
   digitalWrite(MOTOR_PWM_pin, LOW);
 
   /* Disable Timer 0 */
-  //TCCR0B = TCCR0B & 0xF8;
+  TCCR0B = TCCR0B & 0xF8;
 }
 
 void loop()
