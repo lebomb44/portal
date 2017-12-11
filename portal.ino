@@ -20,7 +20,7 @@
 #define PORTAL_CMD_OPEN  1
 
 #define MOTOR_MAX_CURRENT 110
-#define MOTOR_MAX_SLOW_CURRENT 70
+#define MOTOR_MAX_SLOW_CURRENT 100
 
 HomeEasy homeEasy;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
