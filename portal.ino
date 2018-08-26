@@ -1,8 +1,8 @@
 #include <Fifo_U16.h>
-#include <HomeEasy.h>
-//#include <HT12E.h>
+#include <HT12E.h>
 #define F_CPU 16000000UL
 #include <util/delay.h>
+#include "wiring_private.h"
 
 #define LED_pin 13
 #define RELAY_LEFT_pin 7
@@ -11,22 +11,25 @@
 /* LIMITER used at start of CLOSE and end of OPEN */
 #define LIMITER_LEFT_pin 5
 /* LIMITER used at start of OPEN and end of CLOSE */
-#define LIMITER_RIGHT_pin 3
-#define RF_IN_pin 2
+#define LIMITER_RIGHT_pin 4
+/* LIMITER interrupt */
+#define LIMITER_INT_pin 2
+#define RF_IN_pin 3
 #define MOTOR_SENSE_pin A0
 #define MOTOR_PWM_pin 11
 
-#define PORTAL_FULL_SLOT ((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) * 4)
+#define PORTAL_FULL_SLOT ((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) * 6)
 #define PORTAL_SLOW_SLOT 2000
-#define PORTAL_CRUISE_SLOT 6000
+#define PORTAL_CRUISE_SLOT 5000
 
-#define PORTAL_CMD_CLOSE 0
-#define PORTAL_CMD_OPEN  1
+#define PORTAL_CMD_CLOSE 0x99
+#define PORTAL_CMD_CLOSE_OTHER1 0xA9
+#define PORTAL_CMD_OPEN  0x69
 
 #define MOTOR_MAX_CURRENT 190
 #define MOTOR_MAX_SLOW_CURRENT 190
 
-HomeEasy homeEasy;
+HT12E ht12e;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
 int portal_cmd = PORTAL_CMD_CLOSE;
 boolean portal_cmd_accepted = false;
@@ -57,8 +60,8 @@ uint16_t get_force(uint16_t _begin_position, uint16_t _position) {
     }
     if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT) <= _position) {
       _end_force = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - _position;
-      if(PORTAL_SLOW_SLOT/2 > _end_force) {
-        _end_force = PORTAL_SLOW_SLOT/4;
+      if(PORTAL_SLOW_SLOT/3 > _end_force) {
+        _end_force = PORTAL_SLOW_SLOT/3;
       }
     }
   }
@@ -76,7 +79,7 @@ uint16_t get_force(uint16_t _begin_position, uint16_t _position) {
 
 void setup()
 {
-  homeEasy.init();
+  ht12e.init();
   // initialize serial communications and wait for port to open:
   Serial.begin(115200);
   pinMode(13, OUTPUT); 
@@ -88,6 +91,7 @@ void setup()
   digitalWrite(IR_POWER_pin, LOW);
   pinMode(LIMITER_LEFT_pin, INPUT);
   pinMode(LIMITER_RIGHT_pin, INPUT);
+  pinMode(LIMITER_INT_pin, INPUT);
   pinMode(RF_IN_pin, INPUT);
   pinMode(MOTOR_SENSE_pin, INPUT);
   pinMode(MOTOR_PWM_pin, OUTPUT);
@@ -95,26 +99,29 @@ void setup()
 
   /* Disable Timer 0 */
   TCCR0B = TCCR0B & 0xF8;
+
+  /* Configure LIMTERs interrupt INT0 */
+  sbi(EICRA, ISC01); // Bit 1, 0 - ISC01, ISC00: Interrupt Sense Control 0 Bit 1 and Bit 0 : 11 = The rising edge of INT0 generates an interrupt request.
+  sbi(EICRA, ISC00);
+  /* Disable LIMITERs interrupt INT0 */
+  cbi(EIMSK, INT0); // Bit 0 - INT0: External Interrupt Request 0 Enable : Disabled
 }
 
 void loop()
 {
-  homeEasy.run();
-  if(true == homeEasy.rxCodeIsReady()) {
-    Serial.print(homeEasy.rxGetCode(), HEX);Serial.print(" : ");
-    Serial.print(homeEasy.rxGetManufacturer(), HEX);Serial.print("-");
-    Serial.print(homeEasy.rxGetGroup(), HEX);Serial.print("-");
-    Serial.print(homeEasy.rxGetDevice(), HEX);Serial.print("-");
-    Serial.print(homeEasy.rxGetStatus(), HEX);Serial.println();
+  ht12e.run();
+  if(true == ht12e.rxCodeIsReady()) {
+    Serial.print(ht12e.rxGetCode(), HEX);Serial.print(" : ");
+    Serial.print(ht12e.rxGetAddress(), HEX);Serial.print(" - ");
+    Serial.print(ht12e.rxGetData(), HEX);Serial.println();
     _delay_ms(500);
-    homeEasy.purge();
+    ht12e.purge();
     /* Check the authorized codes */
-    if(((0xFCE1CE == homeEasy.rxGetManufacturer()) && (0x0 == homeEasy.rxGetGroup()) && (0x2 == homeEasy.rxGetDevice())) \
-    || ((0xFCBDD6 == homeEasy.rxGetManufacturer()) && (0x0 == homeEasy.rxGetGroup()) && (0x2 == homeEasy.rxGetDevice())) \
-    || ((0xFCDAD2 == homeEasy.rxGetManufacturer()) && (0x0 == homeEasy.rxGetGroup()) && (0x2 == homeEasy.rxGetDevice())) \
-    || ((0xFCC302 == homeEasy.rxGetManufacturer()) && (0x0 == homeEasy.rxGetGroup()) && (0x2 == homeEasy.rxGetDevice()))) {
+    if(0x5956 == ht12e.rxGetAddress()) {
       digitalWrite(IR_POWER_pin, HIGH);
-      if(PORTAL_CMD_CLOSE == homeEasy.rxGetStatus()) {
+      uint8_t codeData = ht12e.rxGetData();
+      if(PORTAL_CMD_CLOSE_OTHER1 == codeData) { codeData = PORTAL_CMD_CLOSE; }
+      if(PORTAL_CMD_CLOSE == codeData) {
         if(LOW == digitalRead(LIMITER_RIGHT_pin)) {
           digitalWrite(RELAY_LEFT_pin, HIGH);
           digitalWrite(RELAY_RIGHT_pin, LOW);
@@ -151,7 +158,7 @@ void loop()
           Serial.println("Already CLOSE");
         }
       }
-      if(PORTAL_CMD_OPEN == homeEasy.rxGetStatus()) {
+      if(PORTAL_CMD_OPEN == codeData) {
         if(LOW == digitalRead(LIMITER_LEFT_pin)) {
           digitalWrite(RELAY_LEFT_pin, LOW);
           digitalWrite(RELAY_RIGHT_pin, HIGH);
@@ -189,11 +196,11 @@ void loop()
         }
       }
     }
-    homeEasy.rxRelease();
+    ht12e.rxRelease();
   }
 
   if(true == portal_cmd_accepted) {
-    _delay_ms(1);
+    _delay_us(1);
     portal_position++;
 
     /* Compute force related to the position */
@@ -279,5 +286,18 @@ void loop()
   //Serial.println(portal_force, DEC);
   digitalWrite(LED_pin, digitalRead(RF_IN_pin));
   //Serial.println(analogRead(MOTOR_SENSE_pin), DEC);
+}
+
+ISR(INT0_vect)
+{
+  if(40000 < portal_position) {
+    digitalWrite(MOTOR_PWM_pin, LOW);
+    digitalWrite(RELAY_LEFT_pin, LOW);
+    digitalWrite(RELAY_RIGHT_pin, LOW);
+    digitalWrite(IR_POWER_pin, LOW);
+    portal_cmd_accepted = false;
+    portal_force = 0;
+    Serial.println("STOP by INT");
+  }
 }
 
