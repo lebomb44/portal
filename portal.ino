@@ -18,31 +18,31 @@
 #define MOTOR_SENSE_pin A0
 #define MOTOR_PWM_pin 11
 
-#define PORTAL_FULL_SLOT ((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) * 6)
+#define PORTAL_FULL_SLOT ((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) * 10)
 #define PORTAL_SLOW_SLOT 2000
 #define PORTAL_CRUISE_SLOT 5000
 
 #define PORTAL_CMD_CLOSE 0x99
 #define PORTAL_CMD_CLOSE_OTHER1 0xA9
 #define PORTAL_CMD_OPEN  0x69
-
-#define MOTOR_MAX_CURRENT 190
-#define MOTOR_MAX_SLOW_CURRENT 190
+//59
+#define MOTOR_MAX_CURRENT 300
+#define MOTOR_MAX_SLOW_CURRENT 300
 
 HT12E ht12e;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
 int portal_cmd = PORTAL_CMD_CLOSE;
 boolean portal_cmd_accepted = false;
-uint16_t portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
-uint16_t portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
+uint32_t portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
+uint32_t portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
 uint16_t portal_force = 0;
 int motor_max_current = MOTOR_MAX_CURRENT;
 uint16_t motor_max_current_nb = 0;
 
-uint16_t get_force(uint16_t _begin_position, uint16_t _position) {
-  uint16_t _begin_force = 0;
-  uint16_t _end_force = 0;
-  uint16_t _force = 0;
+uint32_t get_force(uint32_t _begin_position, uint32_t _position) {
+  uint32_t _begin_force = 0;
+  uint32_t _end_force = 0;
+  uint32_t _force = 0;
 
   if(PORTAL_SLOW_SLOT > (_position - _begin_position)) {
     _begin_force = _position - _begin_position;
@@ -223,7 +223,7 @@ void loop()
   /* Check over current filtered on several acquisitions */
   int motor_currentRead = analogRead(MOTOR_SENSE_pin);
   if(motor_max_current < motor_currentRead) {
-    motor_max_current_nb++;
+    //motor_max_current_nb++;
   }
   else {
     motor_max_current_nb = 0;
@@ -239,6 +239,7 @@ void loop()
     Serial.print("CURRENT MAX detected: "); Serial.println(motor_currentRead, DEC);
     portal_cmd_accepted = false;
     portal_force = 0;
+  digitalWrite(LED_pin, HIGH);
   }
   /* Check Limiter at end of CLOSE */
   if(PORTAL_CMD_CLOSE == portal_cmd) {
@@ -269,7 +270,7 @@ void loop()
     }
   }
   /* Timeout */
-  if(PORTAL_FULL_SLOT < portal_position) {
+  if(100000 < portal_position) {
     portal_position = PORTAL_FULL_SLOT;
     digitalWrite(MOTOR_PWM_pin, LOW);
     digitalWrite(RELAY_LEFT_pin, LOW);
@@ -284,8 +285,8 @@ void loop()
   //digitalWrite(MOTOR_PWM_pin, HIGH);
   analogWrite(MOTOR_PWM_pin, map(portal_force, 0, PORTAL_SLOW_SLOT, 0, 255));
   //Serial.println(portal_force, DEC);
-  digitalWrite(LED_pin, digitalRead(RF_IN_pin));
-  //Serial.println(analogRead(MOTOR_SENSE_pin), DEC);
+  //digitalWrite(LED_pin, digitalRead(RF_IN_pin));
+  //DEBUG Serial.println(analogRead(MOTOR_SENSE_pin), DEC);
 }
 
 ISR(INT0_vect)
