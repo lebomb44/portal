@@ -5,6 +5,7 @@
 #include "wiring_private.h"
 
 #define LED_pin 13
+#define WARN_LED_pin 12
 #define RELAY_LEFT_pin 7
 #define RELAY_RIGHT_pin 8
 #define IR_POWER_pin 10
@@ -22,8 +23,7 @@
 #define PORTAL_SLOW_SLOT 2000
 #define PORTAL_CRUISE_SLOT 5000
 
-#define PORTAL_CMD_CLOSE 0x99
-#define PORTAL_CMD_CLOSE_OTHER1 0xA9
+#define PORTAL_CMD_CLOSE 0x59
 #define PORTAL_CMD_OPEN  0x69
 //59
 #define MOTOR_MAX_CURRENT 300
@@ -79,10 +79,19 @@ uint32_t get_force(uint32_t _begin_position, uint32_t _position) {
 
 void setup()
 {
+  pinMode(LED_pin, OUTPUT);
+  //pinMode(WARN_LED_pin, OUTPUT);
+  /*
+  for(int i=0; i<10; i++) {
+    digitalWrite(WARN_LED_pin, HIGH);
+    _delay_ms(200);
+    digitalWrite(WARN_LED_pin, LOW);
+    _delay_ms(200);
+  }
+  */
   ht12e.init();
   // initialize serial communications and wait for port to open:
   Serial.begin(115200);
-  pinMode(13, OUTPUT); 
   pinMode(RELAY_LEFT_pin, OUTPUT);
   digitalWrite(RELAY_LEFT_pin, LOW);
   pinMode(RELAY_RIGHT_pin, OUTPUT);
@@ -100,11 +109,11 @@ void setup()
   /* Disable Timer 0 */
   TCCR0B = TCCR0B & 0xF8;
 
-  /* Configure LIMTERs interrupt INT0 */
-  sbi(EICRA, ISC01); // Bit 1, 0 - ISC01, ISC00: Interrupt Sense Control 0 Bit 1 and Bit 0 : 11 = The rising edge of INT0 generates an interrupt request.
-  sbi(EICRA, ISC00);
-  /* Disable LIMITERs interrupt INT0 */
-  cbi(EIMSK, INT0); // Bit 0 - INT0: External Interrupt Request 0 Enable : Disabled
+  /* Configure LIMTERs interrupt INT1 */
+  sbi(EICRA, ISC11); // Bit 3, 2 - ISC11, ISC10: Interrupt Sense Control 1 Bit 1 and Bit 0 : 11 = The rising edge of INT1 generates an interrupt request.
+  sbi(EICRA, ISC10);
+  /* Enable LIMITERs interrupt INT1 */
+  sbi(EIMSK, INT1); // Bit 1 - INT1: External Interrupt Request 1 Enable : Enabled
 }
 
 void loop()
@@ -120,7 +129,6 @@ void loop()
     if(0x5956 == ht12e.rxGetAddress()) {
       digitalWrite(IR_POWER_pin, HIGH);
       uint8_t codeData = ht12e.rxGetData();
-      if(PORTAL_CMD_CLOSE_OTHER1 == codeData) { codeData = PORTAL_CMD_CLOSE; }
       if(PORTAL_CMD_CLOSE == codeData) {
         if(LOW == digitalRead(LIMITER_RIGHT_pin)) {
           digitalWrite(RELAY_LEFT_pin, HIGH);
@@ -140,10 +148,10 @@ void loop()
           if(HIGH == digitalRead(LIMITER_LEFT_pin)) {
             portal_start_position = 0;
             portal_position = portal_start_position;
-            Serial.println("CLOSE from LIMITER");
+            Serial.println("CLOSING started from LIMITER");
           }
           portal_cmd_accepted = true;
-          Serial.print("CLOSE at: "); Serial.println(portal_position, DEC);
+          Serial.print("CLOSING started at: "); Serial.println(portal_position, DEC);
         }
         else {
           /* Use this new command to reset to known position */
@@ -177,10 +185,10 @@ void loop()
           if(HIGH == digitalRead(LIMITER_RIGHT_pin)) {
             portal_start_position = 0;
             portal_position = portal_start_position;
-            Serial.println("OPEN from LIMITER");
+            Serial.println("OPENING started from LIMITER");
           }
           portal_cmd_accepted = true;
-          Serial.print("OPEN at: "); Serial.println(portal_position, DEC);
+          Serial.print("OPENING started at: "); Serial.println(portal_position, DEC);
         }
         else {
           /* Use this new command to reset to known position */
@@ -239,7 +247,7 @@ void loop()
     Serial.print("CURRENT MAX detected: "); Serial.println(motor_currentRead, DEC);
     portal_cmd_accepted = false;
     portal_force = 0;
-  digitalWrite(LED_pin, HIGH);
+    digitalWrite(LED_pin, HIGH);
   }
   /* Check Limiter at end of CLOSE */
   if(PORTAL_CMD_CLOSE == portal_cmd) {
@@ -276,7 +284,7 @@ void loop()
     digitalWrite(RELAY_LEFT_pin, LOW);
     digitalWrite(RELAY_RIGHT_pin, LOW);
     digitalWrite(IR_POWER_pin, LOW);
-    if(true == portal_cmd_accepted) { Serial.print("TIMEOUT detected"); }
+    if(true == portal_cmd_accepted) { Serial.println("TIMEOUT detected"); }
     portal_cmd_accepted = false;
     portal_force = 0;
   }
@@ -289,9 +297,9 @@ void loop()
   //DEBUG Serial.println(analogRead(MOTOR_SENSE_pin), DEC);
 }
 
-ISR(INT0_vect)
+ISR(INT1_vect)
 {
-  if(40000 < portal_position) {
+  if(4000 < portal_position) {
     digitalWrite(MOTOR_PWM_pin, LOW);
     digitalWrite(RELAY_LEFT_pin, LOW);
     digitalWrite(RELAY_RIGHT_pin, LOW);
@@ -301,4 +309,3 @@ ISR(INT0_vect)
     Serial.println("STOP by INT");
   }
 }
-
