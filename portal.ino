@@ -80,18 +80,9 @@ uint32_t get_force(uint32_t _begin_position, uint32_t _position) {
 void setup()
 {
   pinMode(LED_pin, OUTPUT);
-  //pinMode(WARN_LED_pin, OUTPUT);
-  /*
-  for(int i=0; i<10; i++) {
-    digitalWrite(WARN_LED_pin, HIGH);
-    _delay_ms(200);
-    digitalWrite(WARN_LED_pin, LOW);
-    _delay_ms(200);
-  }
-  */
   ht12e.init();
   // initialize serial communications and wait for port to open:
-  Serial.begin(115200);
+  Serial.begin(9600);
   pinMode(RELAY_LEFT_pin, OUTPUT);
   digitalWrite(RELAY_LEFT_pin, LOW);
   pinMode(RELAY_RIGHT_pin, OUTPUT);
