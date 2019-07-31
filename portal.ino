@@ -1,5 +1,3 @@
-#include <Fifo_U16.h>
-#include <HT12E.h>
 #define F_CPU 16000000UL
 #include <util/delay.h>
 #include "wiring_private.h"
@@ -29,7 +27,6 @@
 #define MOTOR_MAX_CURRENT 300
 #define MOTOR_MAX_SLOW_CURRENT 300
 
-HT12E ht12e;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
 int portal_cmd = PORTAL_CMD_CLOSE;
 boolean portal_cmd_accepted = false;
@@ -80,7 +77,6 @@ uint32_t get_force(uint32_t _begin_position, uint32_t _position) {
 void setup()
 {
   pinMode(LED_pin, OUTPUT);
-  ht12e.init();
   // initialize serial communications and wait for port to open:
   Serial.begin(9600);
   pinMode(RELAY_LEFT_pin, OUTPUT);
@@ -111,11 +107,6 @@ void loop()
 {
   ht12e.run();
   if(true == ht12e.rxCodeIsReady()) {
-    Serial.print(ht12e.rxGetCode(), HEX);Serial.print(" : ");
-    Serial.print(ht12e.rxGetAddress(), HEX);Serial.print(" - ");
-    Serial.print(ht12e.rxGetData(), HEX);Serial.println();
-    _delay_ms(500);
-    ht12e.purge();
     /* Check the authorized codes */
     if(0x5956 == ht12e.rxGetAddress()) {
       digitalWrite(IR_POWER_pin, HIGH);
