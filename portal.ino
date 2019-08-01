@@ -1,5 +1,3 @@
-#include <Fifo_U16.h>
-#include <HT12E.h>
 #define F_CPU 16000000UL
 #include <util/delay.h>
 #include "wiring_private.h"
@@ -29,7 +27,6 @@
 #define MOTOR_MAX_CURRENT 300
 #define MOTOR_MAX_SLOW_CURRENT 300
 
-HT12E ht12e;
 int portal_last_cmd = PORTAL_CMD_CLOSE;
 int portal_cmd = PORTAL_CMD_CLOSE;
 boolean portal_cmd_accepted = false;
@@ -80,7 +77,6 @@ uint32_t get_force(uint32_t _begin_position, uint32_t _position) {
 void setup()
 {
   pinMode(LED_pin, OUTPUT);
-  ht12e.init();
   // initialize serial communications and wait for port to open:
   Serial.begin(9600);
   pinMode(RELAY_LEFT_pin, OUTPUT);
@@ -97,9 +93,6 @@ void setup()
   pinMode(MOTOR_PWM_pin, OUTPUT);
   digitalWrite(MOTOR_PWM_pin, LOW);
 
-  /* Disable Timer 0 */
-  TCCR0B = TCCR0B & 0xF8;
-
   /* Configure LIMTERs interrupt INT1 */
   sbi(EICRA, ISC11); // Bit 3, 2 - ISC11, ISC10: Interrupt Sense Control 1 Bit 1 and Bit 0 : 11 = The rising edge of INT1 generates an interrupt request.
   sbi(EICRA, ISC10);
@@ -109,93 +102,77 @@ void setup()
 
 void loop()
 {
-  ht12e.run();
-  if(true == ht12e.rxCodeIsReady()) {
-    Serial.print(ht12e.rxGetCode(), HEX);Serial.print(" : ");
-    Serial.print(ht12e.rxGetAddress(), HEX);Serial.print(" - ");
-    Serial.print(ht12e.rxGetData(), HEX);Serial.println();
-    _delay_ms(500);
-    ht12e.purge();
-    /* Check the authorized codes */
-    if(0x5956 == ht12e.rxGetAddress()) {
-      digitalWrite(IR_POWER_pin, HIGH);
-      uint8_t codeData = ht12e.rxGetData();
-      if(PORTAL_CMD_CLOSE == codeData) {
-        if(LOW == digitalRead(LIMITER_RIGHT_pin)) {
-          digitalWrite(RELAY_LEFT_pin, HIGH);
-          digitalWrite(RELAY_RIGHT_pin, LOW);
-          portal_last_cmd = portal_cmd;
-          portal_cmd = PORTAL_CMD_CLOSE;
-          if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) < portal_position) {
-            portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
-          }
-          if(PORTAL_CMD_CLOSE == portal_last_cmd) {
-            portal_start_position = portal_position;
-          }
-          if(PORTAL_CMD_OPEN == portal_last_cmd) {
-            portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - portal_position;
-            portal_position = portal_start_position;
-          }
-          if(HIGH == digitalRead(LIMITER_LEFT_pin)) {
-            portal_start_position = 0;
-            portal_position = portal_start_position;
-            Serial.println("CLOSING started from LIMITER");
-          }
-          portal_cmd_accepted = true;
-          Serial.print("CLOSING started at: "); Serial.println(portal_position, DEC);
+  if(true == digitalRead(RF_IN_pin)) {
+    portal_cmd = PORTAL_CMD_CLOSE;
+  }
+  else {
+    portal_cmd = PORTAL_CMD_OPEN;
+  }
+  if(portal_cmd != portal_last_cmd) {
+    if(PORTAL_CMD_CLOSE == portal_cmd) {
+      if(LOW == digitalRead(LIMITER_RIGHT_pin)) {
+        digitalWrite(RELAY_LEFT_pin, HIGH);
+        digitalWrite(RELAY_RIGHT_pin, LOW);
+        portal_last_cmd = portal_cmd;
+        portal_cmd = PORTAL_CMD_CLOSE;
+        if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) < portal_position) {
+          portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
         }
-        else {
-          /* Use this new command to reset to known position */
-          digitalWrite(MOTOR_PWM_pin, LOW);
-          digitalWrite(RELAY_LEFT_pin, LOW);
-          digitalWrite(RELAY_RIGHT_pin, LOW);
-          digitalWrite(IR_POWER_pin, LOW);
-          portal_start_position = PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
+        portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - portal_position;
+        portal_position = portal_start_position;
+        if(HIGH == digitalRead(LIMITER_LEFT_pin)) {
+          portal_start_position = 0;
           portal_position = portal_start_position;
-          portal_cmd_accepted = false;
-          portal_force = 0;
-          Serial.println("Already CLOSE");
+          Serial.println("CLOSING started from LIMITER");
         }
-      }
-      if(PORTAL_CMD_OPEN == codeData) {
-        if(LOW == digitalRead(LIMITER_LEFT_pin)) {
-          digitalWrite(RELAY_LEFT_pin, LOW);
-          digitalWrite(RELAY_RIGHT_pin, HIGH);
-          portal_last_cmd = portal_cmd;
-          portal_cmd = PORTAL_CMD_OPEN;
-          if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) < portal_position) {
-            portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
-          }
-          if(PORTAL_CMD_OPEN == portal_last_cmd) {
-            portal_start_position = portal_position;
-          }
-          if(PORTAL_CMD_CLOSE == portal_last_cmd) {
-            portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - portal_position;
-            portal_position = portal_start_position;
-          }
-          if(HIGH == digitalRead(LIMITER_RIGHT_pin)) {
-            portal_start_position = 0;
-            portal_position = portal_start_position;
-            Serial.println("OPENING started from LIMITER");
-          }
-          portal_cmd_accepted = true;
-          Serial.print("OPENING started at: "); Serial.println(portal_position, DEC);
+        portal_cmd_accepted = true;
+        Serial.print("CLOSING started at: "); Serial.println(portal_position, DEC);
         }
-        else {
-          /* Use this new command to reset to known position */
-          digitalWrite(MOTOR_PWM_pin, LOW);
-          digitalWrite(RELAY_LEFT_pin, LOW);
-          digitalWrite(RELAY_RIGHT_pin, LOW);
-          digitalWrite(IR_POWER_pin, LOW);
-          portal_start_position = PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
-          portal_position = portal_start_position;
-          portal_cmd_accepted = false;
-          portal_force = 0;
-          Serial.println("Already OPEN");
-        }
+      else {
+        /* Use this new command to reset to known position */
+        digitalWrite(MOTOR_PWM_pin, LOW);
+        digitalWrite(RELAY_LEFT_pin, LOW);
+        digitalWrite(RELAY_RIGHT_pin, LOW);
+        digitalWrite(IR_POWER_pin, LOW);
+        portal_start_position = PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
+        portal_position = portal_start_position;
+        portal_cmd_accepted = false;
+        portal_force = 0;
+        Serial.println("Already CLOSE");
       }
     }
-    ht12e.rxRelease();
+    else {
+      if(LOW == digitalRead(LIMITER_LEFT_pin)) {
+        digitalWrite(RELAY_LEFT_pin, LOW);
+        digitalWrite(RELAY_RIGHT_pin, HIGH);
+        portal_last_cmd = portal_cmd;
+        portal_cmd = PORTAL_CMD_OPEN;
+        if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) < portal_position) {
+          portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
+        }
+        portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - portal_position;
+        portal_position = portal_start_position;
+        if(HIGH == digitalRead(LIMITER_RIGHT_pin)) {
+          portal_start_position = 0;
+          portal_position = portal_start_position;
+          Serial.println("OPENING started from LIMITER");
+        }
+        portal_cmd_accepted = true;
+        Serial.print("OPENING started at: "); Serial.println(portal_position, DEC);
+      }
+      else {
+        /* Use this new command to reset to known position */
+        digitalWrite(MOTOR_PWM_pin, LOW);
+        digitalWrite(RELAY_LEFT_pin, LOW);
+        digitalWrite(RELAY_RIGHT_pin, LOW);
+        digitalWrite(IR_POWER_pin, LOW);
+        portal_start_position = PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
+        portal_position = portal_start_position;
+        portal_cmd_accepted = false;
+        portal_force = 0;
+        Serial.println("Already OPEN");
+      }
+    }
   }
 
   if(true == portal_cmd_accepted) {
@@ -281,10 +258,9 @@ void loop()
   }
 
   /* Clone LED status on RF signal */
-  //digitalWrite(MOTOR_PWM_pin, HIGH);
   analogWrite(MOTOR_PWM_pin, map(portal_force, 0, PORTAL_SLOW_SLOT, 0, 255));
   //Serial.println(portal_force, DEC);
-  //digitalWrite(LED_pin, digitalRead(RF_IN_pin));
+  digitalWrite(LED_pin, digitalRead(RF_IN_pin));
   //DEBUG Serial.println(analogRead(MOTOR_SENSE_pin), DEC);
 }
 
