@@ -88,7 +88,7 @@ void setup()
   pinMode(LIMITER_LEFT_pin, INPUT);
   pinMode(LIMITER_RIGHT_pin, INPUT);
   pinMode(LIMITER_INT_pin, INPUT);
-  pinMode(RF_IN_pin, INPUT);
+  pinMode(RF_IN_pin, INPUT_PULLUP);
   pinMode(MOTOR_SENSE_pin, INPUT);
   pinMode(MOTOR_PWM_pin, OUTPUT);
   digitalWrite(MOTOR_PWM_pin, LOW);
