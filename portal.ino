@@ -12,8 +12,8 @@
 /* LIMITER used at start of OPEN and end of CLOSE */
 #define LIMITER_RIGHT_pin 4
 /* LIMITER interrupt */
-#define LIMITER_INT_pin 2
-#define RF_IN_pin 3
+#define LIMITER_INT_pin 3
+#define RF_IN_pin 2
 #define MOTOR_SENSE_pin A0
 #define MOTOR_PWM_pin 11
 
@@ -21,14 +21,16 @@
 #define PORTAL_SLOW_SLOT 2000
 #define PORTAL_CRUISE_SLOT 5000
 
-#define PORTAL_CMD_CLOSE 0x59
-#define PORTAL_CMD_OPEN  0x69
-//59
+#define PORTAL_CMD_CLOSE 0x00
+#define PORTAL_CMD_OPEN  0x01
+#define PORTAL_CMD_NB_MAX 500
+
 #define MOTOR_MAX_CURRENT 300
 #define MOTOR_MAX_SLOW_CURRENT 300
 
-int portal_last_cmd = PORTAL_CMD_CLOSE;
-int portal_cmd = PORTAL_CMD_CLOSE;
+uint16_t portal_cmd_nb = 0;
+uint8_t portal_last_cmd = PORTAL_CMD_CLOSE;
+uint8_t portal_cmd = PORTAL_CMD_CLOSE;
 boolean portal_cmd_accepted = false;
 uint32_t portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
 uint32_t portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
@@ -57,8 +59,8 @@ uint32_t get_force(uint32_t _begin_position, uint32_t _position) {
     }
     if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT) <= _position) {
       _end_force = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - _position;
-      if(PORTAL_SLOW_SLOT/3 > _end_force) {
-        _end_force = PORTAL_SLOW_SLOT/3;
+      if(PORTAL_SLOW_SLOT/2 > _end_force) {
+        _end_force = PORTAL_SLOW_SLOT/2;
       }
     }
   }
@@ -79,6 +81,7 @@ void setup()
   pinMode(LED_pin, OUTPUT);
   // initialize serial communications and wait for port to open:
   Serial.begin(9600);
+  Serial.print("Setting portal...");
   pinMode(RELAY_LEFT_pin, OUTPUT);
   digitalWrite(RELAY_LEFT_pin, LOW);
   pinMode(RELAY_RIGHT_pin, OUTPUT);
@@ -98,33 +101,38 @@ void setup()
   sbi(EICRA, ISC10);
   /* Enable LIMITERs interrupt INT1 */
   sbi(EIMSK, INT1); // Bit 1 - INT1: External Interrupt Request 1 Enable : Enabled
+  Serial.println("OK");
 }
 
 void loop()
 {
   if(true == digitalRead(RF_IN_pin)) {
+    if(0 < portal_cmd_nb) { portal_cmd_nb--; }
+  }
+  else {
+    if(portal_cmd_nb < PORTAL_CMD_NB_MAX) { portal_cmd_nb++; }
+  }
+  if(portal_cmd_nb < PORTAL_CMD_NB_MAX / 2) {
     portal_cmd = PORTAL_CMD_CLOSE;
   }
   else {
     portal_cmd = PORTAL_CMD_OPEN;
   }
   if(portal_cmd != portal_last_cmd) {
+    portal_last_cmd = portal_cmd;
     if(PORTAL_CMD_CLOSE == portal_cmd) {
       if(LOW == digitalRead(LIMITER_RIGHT_pin)) {
         digitalWrite(RELAY_LEFT_pin, HIGH);
         digitalWrite(RELAY_RIGHT_pin, LOW);
-        portal_last_cmd = portal_cmd;
-        portal_cmd = PORTAL_CMD_CLOSE;
         if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) < portal_position) {
           portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
         }
         portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - portal_position;
-        portal_position = portal_start_position;
         if(HIGH == digitalRead(LIMITER_LEFT_pin)) {
           portal_start_position = 0;
-          portal_position = portal_start_position;
           Serial.println("CLOSING started from LIMITER");
         }
+        portal_position = portal_start_position;
         portal_cmd_accepted = true;
         Serial.print("CLOSING started at: "); Serial.println(portal_position, DEC);
         }
@@ -145,18 +153,15 @@ void loop()
       if(LOW == digitalRead(LIMITER_LEFT_pin)) {
         digitalWrite(RELAY_LEFT_pin, LOW);
         digitalWrite(RELAY_RIGHT_pin, HIGH);
-        portal_last_cmd = portal_cmd;
-        portal_cmd = PORTAL_CMD_OPEN;
         if((PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT) < portal_position) {
           portal_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT;
         }
         portal_start_position = PORTAL_SLOW_SLOT + PORTAL_CRUISE_SLOT + PORTAL_SLOW_SLOT - portal_position;
-        portal_position = portal_start_position;
         if(HIGH == digitalRead(LIMITER_RIGHT_pin)) {
           portal_start_position = 0;
-          portal_position = portal_start_position;
           Serial.println("OPENING started from LIMITER");
         }
+        portal_position = portal_start_position;
         portal_cmd_accepted = true;
         Serial.print("OPENING started at: "); Serial.println(portal_position, DEC);
       }
@@ -176,7 +181,6 @@ void loop()
   }
 
   if(true == portal_cmd_accepted) {
-    _delay_us(1);
     portal_position++;
 
     /* Compute force related to the position */
@@ -246,7 +250,7 @@ void loop()
     }
   }
   /* Timeout */
-  if(100000 < portal_position) {
+  if(PORTAL_FULL_SLOT < portal_position) {
     portal_position = PORTAL_FULL_SLOT;
     digitalWrite(MOTOR_PWM_pin, LOW);
     digitalWrite(RELAY_LEFT_pin, LOW);
@@ -262,6 +266,7 @@ void loop()
   //Serial.println(portal_force, DEC);
   digitalWrite(LED_pin, digitalRead(RF_IN_pin));
   //DEBUG Serial.println(analogRead(MOTOR_SENSE_pin), DEC);
+  _delay_us(2000);
 }
 
 ISR(INT1_vect)
