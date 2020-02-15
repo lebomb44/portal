@@ -272,12 +272,26 @@ void loop()
 ISR(INT1_vect)
 {
   if(4000 < portal_position) {
-    digitalWrite(MOTOR_PWM_pin, LOW);
-    digitalWrite(RELAY_LEFT_pin, LOW);
-    digitalWrite(RELAY_RIGHT_pin, LOW);
-    digitalWrite(IR_POWER_pin, LOW);
-    portal_cmd_accepted = false;
-    portal_force = 0;
-    Serial.println("STOP by INT");
+    // Filter spurious interrupts
+    uint8_t nbCheck = 10;
+    while(0 < nbCheck)
+    {
+      _delay_ms(20);
+      if(LOW == digitalRead(LIMITER_INT_pin))
+      {
+        break;
+      }
+      nbCheck--;
+    }
+    if(0 == nbCheck)
+    {
+      digitalWrite(MOTOR_PWM_pin, LOW);
+      digitalWrite(RELAY_LEFT_pin, LOW);
+      digitalWrite(RELAY_RIGHT_pin, LOW);
+      digitalWrite(IR_POWER_pin, LOW);
+      portal_cmd_accepted = false;
+      portal_force = 0;
+      Serial.println("STOP by INT");
+    }
   }
 }
