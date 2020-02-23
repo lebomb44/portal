@@ -273,10 +273,10 @@ ISR(INT1_vect)
 {
   if(4000 < portal_position) {
     // Filter spurious interrupts
-    uint8_t nbCheck = 10;
+    uint8_t nbCheck = 40;
     while(0 < nbCheck)
     {
-      _delay_ms(20);
+      _delay_ms(10);
       if(LOW == digitalRead(LIMITER_INT_pin))
       {
         break;
