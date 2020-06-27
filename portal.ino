@@ -100,7 +100,7 @@ void setup()
   sbi(EICRA, ISC11); // Bit 3, 2 - ISC11, ISC10: Interrupt Sense Control 1 Bit 1 and Bit 0 : 11 = The rising edge of INT1 generates an interrupt request.
   sbi(EICRA, ISC10);
   /* Enable LIMITERs interrupt INT1 */
-  sbi(EIMSK, INT1); // Bit 1 - INT1: External Interrupt Request 1 Enable : Enabled
+  //sbi(EIMSK, INT1); // Bit 1 - INT1: External Interrupt Request 1 Enable : Enabled
   Serial.println("OK");
 }
 
